@@ -1,0 +1,24 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "temple-scope"
+version = "0.2.0"
+description = "Fail the build when a repo drifts past its declared single-purpose scope."
+readme = "README.md"
+requires-python = ">=3.11"
+license = "Apache-2.0"
+keywords = ["scope", "ci", "linter", "discipline", "single-purpose", "goweft"]
+authors = [{ name = "goweft" }]
+dependencies = []  # zero third-party deps — temple eats its own cooking
+
+[project.scripts]
+temple = "temple.core:main"
+
+[project.urls]
+Homepage = "https://github.com/goweft/temple"
+Issues = "https://github.com/goweft/temple/issues"
+
+[tool.hatch.build.targets.wheel]
+packages = ["temple"]

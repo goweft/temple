@@ -1,0 +1,30 @@
+name: "temple"
+description: "Fail the build when a repo drifts past its declared single-purpose scope."
+branding:
+  icon: "crop"
+  color: "purple"
+
+inputs:
+  config:
+    description: "Path to the scope contract."
+    required: false
+    default: "temple.toml"
+  root:
+    description: "Repo root to inspect."
+    required: false
+    default: "."
+  format:
+    description: "Output format: text or json."
+    required: false
+    default: "text"
+
+runs:
+  using: "composite"
+  steps:
+    - name: temple check
+      shell: bash
+      run: |
+        PYTHONPATH="${{ github.action_path }}" python3 -m temple check \
+          --root "${{ inputs.root }}" \
+          --config "${{ inputs.config }}" \
+          --format "${{ inputs.format }}"
