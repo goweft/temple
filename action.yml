@@ -1,4 +1,4 @@
-name: "temple"
+name: "Temple Scope Guard"
 description: "Fail the build when a repo drifts past its declared single-purpose scope."
 branding:
   icon: "crop"
