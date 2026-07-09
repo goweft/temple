@@ -6,7 +6,7 @@ A _temple_ is the stretcher on a loom that holds woven cloth to a constant width
 
 temple checks **scope width** — not code quality, not security, not style. You write a short contract that says what this repo is *allowed* to be, and temple fails CI the moment a change breaches it. It turns "one small addition" — the way single-purpose tools quietly become frameworks — into an explicit decision you have to make on purpose.
 
-Zero third-party dependencies. Standard-library Python, one TOML file.
+A static Go binary, zero runtime dependencies, one TOML file.
 
 ---
 
@@ -31,14 +31,17 @@ max_deps  = 3       # third-party dependency ceiling
 forbid = ["import requests", "TODO: framework"]
 
 # Optional knobs:
-# deps_from = "pyproject.toml"          # where to read deps (default: auto)
+# deps_from = "go.mod"                  # where to read deps (default: auto-detect)
 # count_ext = [".py", ".go", ".rs"]     # which files count toward lines/forbid
 ```
+
+If a budget is declared and temple can't find a manifest to measure it against, that's
+a failure — not a silent pass. A check that couldn't run is not a check that passed.
 
 ## Run it
 
 ```bash
-python -m temple check          # or: temple check   (once installed)
+temple check                    # once installed — see Install, below
 temple check --format json      # machine-readable output
 temple check --format sarif     # SARIF 2.1.0 for GitHub code scanning
 temple check --root path/to/repo --config path/to/temple.toml
@@ -51,7 +54,7 @@ temple — scope contract check
   purpose: Fail the build when a repo drifts past its declared single-purpose scope. Nothing more.
   files:        11 / 20
   source lines: 638 / 700
-  deps:         0 / 0
+  deps:         2 / 3
 
   PASS — repo is within scope.
 ```
@@ -61,7 +64,7 @@ temple — scope contract check
 1. **structure** — every git-tracked file matches an `allow` glob (`**`, `*`, `?` supported). Anything outside is drift.
 2. **files** — tracked-file count stays under `max_files`.
 3. **lines** — total source lines (counted extensions) stay under `max_lines`.
-4. **deps** — declared third-party dependencies stay under `max_deps`.
+4. **deps** — declared third-party dependencies stay under `max_deps`. Reads `go.mod` (direct requires; `// indirect` doesn't count), `pyproject.toml`, or `requirements.txt` — whichever is found first, or the one named by `deps_from`. A declared ceiling with no manifest temple can parse is a finding, not a pass.
 5. **forbid** — no forbidden pattern appears in source, reported as `file:line`.
 
 File discovery uses `git ls-files` (so it honors `.gitignore`), falling back to a filtered walk outside a git repo.
@@ -85,8 +88,23 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: goweft/temple@v0   # composite action; needs Python 3.11+ on the runner
+      - uses: goweft/temple@v0   # moving major tag — always the latest release
 ```
+
+The action downloads the platform-matched release binary, verifies it against that
+release's `checksums.txt` before running anything, and installs to a scratch directory
+rather than your checkout. No runtime dependency — not Python, not Go — needs to be on
+the runner already.
+
+Inputs, all optional:
+
+| input | default | meaning |
+|---|---|---|
+| `version` | the release this action ships with | a tag (`v0.3.1`), a bare version (`0.3.1`), or `latest`. Pinning the action pins the binary; `latest` is resolved at run time and is not reproducible. |
+| `github-token` | `${{ github.token }}` | used only to resolve `latest`; unauthenticated lookups are rate-limited on shared runner IPs. |
+| `config` | `temple.toml` | path to the scope contract. |
+| `root` | `.` | repo root to inspect. |
+| `format` | `text` | `text`, `json`, or `sarif`. |
 
 ## GitHub code scanning (SARIF)
 
@@ -104,13 +122,11 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-      - run: pipx install temple-scope
       - name: temple scope check (SARIF)
         id: temple
-        run: temple check --format sarif > temple.sarif
+        uses: goweft/temple@v0
+        with:
+          format: sarif
         continue-on-error: true          # upload the report even on breach
       - name: upload to code scanning
         if: always()
@@ -126,13 +142,26 @@ Run temple at the repo root (the default) so SARIF paths resolve against your fi
 
 ## Install
 
+**GitHub Actions:** see above — nothing to install, the action handles it.
+
+**Locally**, download the platform binary from a [release](https://github.com/goweft/temple/releases) and verify it against the release's `checksums.txt`:
+
 ```bash
-pipx install temple-scope        # isolated CLI
-# or
-pip install temple-scope
+VERSION=0.3.1
+OS=linux        # or darwin; windows ships a .zip
+ARCH=amd64      # or arm64
+ASSET="temple_${VERSION}_${OS}_${ARCH}.tar.gz"
+curl -sSfL -o "$ASSET" "https://github.com/goweft/temple/releases/download/v${VERSION}/${ASSET}"
+curl -sSfL -o checksums.txt "https://github.com/goweft/temple/releases/download/v${VERSION}/checksums.txt"
+sha256sum --ignore-missing -c checksums.txt   # matches by filename -- keep the asset's original name
+tar xzf "$ASSET" temple
 ```
 
-Requires Python 3.11+ (uses the standard-library `tomllib`).
+Or, with a Go toolchain:
+
+```bash
+go install github.com/goweft/temple/cmd/temple@v0.3.1
+```
 
 ## Scope (temple's own "does NOT do")
 
@@ -140,7 +169,7 @@ temple deliberately does **not**:
 
 - lint code quality, format, or type-check — that's your existing tools' job;
 - scan for security issues — that's the rest of the [goweft](https://github.com/goweft) suite;
-- count dependencies outside Python manifests **in v0** (pyproject.toml / requirements.txt only);
+- count dependencies outside `go.mod`, `pyproject.toml`, and `requirements.txt` — no Rust or npm manifests yet;
 - rewrite anything — temple only reports and sets an exit code.
 
 temple ships with its own `temple.toml` and checks itself in CI. It practices what it enforces.
@@ -149,11 +178,16 @@ temple ships with its own `temple.toml` and checks itself in CI. It practices wh
 
 Shipped in **v0.2.0**: `--format sarif` for GitHub code-scanning annotations — the security-positioned distribution move. (It cost ~180 source lines, so temple's own `max_lines` budget was raised on purpose in the same change; the bump is a documented line in `temple.toml`, not silent drift.)
 
+Shipped in **v0.3.0**: ported to Go — a static, zero-runtime binary distributed via `goreleaser`, so the GitHub Action no longer needs Python on the runner.
+
+Shipped in **v0.3.1**: the deps check now reads `go.mod` (the Python-only port had quietly gone blind to its own dependency, and `max_deps` sat unenforced); `checkDeps` fails closed on a declared ceiling with no parseable manifest, instead of passing silently; the GitHub Action verifies release checksums before running anything it downloads.
+
 Deliberately still not in temple:
 
 - `exclude` globs, so the `forbid` scan can skip test fixtures and vendored code (temple's own first dogfood flagged a forbidden literal in a test fixture — this is the clean fix, made on purpose rather than mid-build);
-- dependency counting for Go / Rust / npm manifests;
-- a `temple init` that writes a starter contract.
+- dependency counting for Rust / npm manifests;
+- a `temple init` that writes a starter contract;
+- signed release artifacts — checksums verify integrity, not provenance.
 
 Each of these is a real addition, so each gets made on purpose — not smuggled in.
 
