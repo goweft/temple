@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"regexp"
+	"strings"
 )
 
 // Finding is a single scope violation.
@@ -95,14 +96,22 @@ func checkCounts(c *Contract, root string, files []string) []Finding {
 	return out
 }
 
-// checkDeps — third-party dependency ceiling.
+// checkDeps — third-party dependency ceiling. Fails closed: a declared ceiling
+// with no parseable manifest is a finding, not a silent pass. A check that could
+// not run is not a check that passed.
 func checkDeps(c *Contract, root string) []Finding {
 	if c.MaxDeps == nil {
 		return nil
 	}
 	dr := CountDeps(c, root)
 	if dr == nil {
-		return nil
+		looked := strings.Join(DepManifests, ", ")
+		if c.DepsFrom != "" {
+			looked = c.DepsFrom
+		}
+		return []Finding{newFinding("deps",
+			fmt.Sprintf("max_deps is declared but no dependency manifest could be parsed (looked for: %s)", looked),
+			"", 0)}
 	}
 	if dr.Count > *c.MaxDeps {
 		return []Finding{newFinding("deps",

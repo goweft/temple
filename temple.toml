@@ -20,12 +20,32 @@ allow = [
 
 # Hard budgets.
 max_files = 20
+
 # Set to 1100 in v0.3.0 (Go port). The self-check measured 1045 lines;
 # Go test files are more verbose than Python's unittest (explicit type
 # assertions, no assertEqual sugar), which accounts for the difference.
 # Budget set to 1100 — raised on purpose, documented here, same commit.
-max_lines = 1100
-max_deps  = 0
+#
+# Raised to 1250 in v0.3.1. The self-check measured 1214 and failed the
+# build. The +169 lines: deps.go +56 (a go.mod parser), check.go +13
+# (fail-closed), deps_test.go +106 (new), temple_test.go +18 (the shared
+# fixture no longer declares a ceiling it cannot enforce). Two thirds of
+# the cost is tests — they are what stop the next port from silently
+# dropping the check again, which is exactly what v0.3.0 did.
+# Budget set to 1250 — raised on purpose, documented here, same commit.
+max_lines = 1250
+
+# Was 0 through v0.3.0 — and it was a lie. The deps check only knew how to
+# read pyproject.toml and requirements.txt, so on this Go repo it found no
+# manifest, returned nil, and passed silently. The ceiling held because
+# nothing ever measured against it. v0.3.1 taught it go.mod, and temple
+# immediately failed its own build: one direct require.
+#
+# The require is github.com/BurntSushi/toml, and it is load-bearing — the
+# contract is TOML, and Go has no TOML in its standard library. Raised to 1
+# on purpose, documented here, same commit. "Zero user-facing dependencies"
+# is untouched: the shipped artifact is a static binary.
+max_deps = 1
 
 # The "does NOT do" list — enforced, not just documented.
 # temple must stay network-free and single-purpose.

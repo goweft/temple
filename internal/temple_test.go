@@ -20,7 +20,6 @@ purpose = "test fixture"
 allow   = ["src/**", "*.toml"]
 max_files = 3
 max_lines = 20
-max_deps  = 0
 forbid    = ["NETCALL_FORBIDDEN"]
 `
 
@@ -45,7 +44,12 @@ func setup(t *testing.T, files map[string]string, contractTOML string) (root, cf
 
 func runTest(t *testing.T, files map[string]string) ([]internal.Finding, internal.Stats) {
 	t.Helper()
-	root, cfg := setup(t, files, testContract)
+	return runTestWith(t, files, testContract)
+}
+
+func runTestWith(t *testing.T, files map[string]string, contractTOML string) ([]internal.Finding, internal.Stats) {
+	t.Helper()
+	root, cfg := setup(t, files, contractTOML)
 	c, err := internal.LoadContract(cfg)
 	if err != nil {
 		t.Fatalf("LoadContract: %v", err)
@@ -79,7 +83,7 @@ func TestPassWithinScope(t *testing.T) {
 
 func TestStructureViolation(t *testing.T) {
 	findings, _ := runTest(t, map[string]string{
-		"src/a.py": "x = 1\n",
+		"src/a.py":  "x = 1\n",
 		"stray.txt": "nope\n",
 	})
 	if !hasCheck(findings, "structure") {
@@ -130,10 +134,10 @@ func TestLineBudget(t *testing.T) {
 
 func TestDepCeiling(t *testing.T) {
 	pyproject := "[project]\nname = \"x\"\nversion = \"0\"\ndependencies = [\"requests\", \"click\"]\n"
-	findings, _ := runTest(t, map[string]string{
-		"src/a.py":      "x = 1\n",
+	findings, _ := runTestWith(t, map[string]string{
+		"src/a.py":       "x = 1\n",
 		"pyproject.toml": pyproject,
-	})
+	}, testContract+"max_deps = 0\n")
 	if !hasCheck(findings, "deps") {
 		t.Error("expected deps finding")
 	}
@@ -153,7 +157,7 @@ func TestGlobDoubleStarCrossesDirs(t *testing.T) {
 func TestGlobSingleStarStaysInSegment(t *testing.T) {
 	// docs/x.md does NOT match *.toml or src/**, so it should be flagged
 	findings, _ := runTest(t, map[string]string{
-		"src/a.py": "x=1\n",
+		"src/a.py":  "x=1\n",
 		"docs/x.md": "text\n",
 	})
 	found := false

@@ -15,11 +15,14 @@ type DepResult struct {
 	From  string
 }
 
+// DepManifests are the manifests CountDeps understands, in probe order.
+var DepManifests = []string{"go.mod", "pyproject.toml", "requirements.txt"}
+
 // CountDeps counts third-party dependencies declared in the repo's manifest.
-// v0 supports Python manifests only (pyproject.toml, requirements.txt).
-// Returns nil when no supported manifest is found.
+// Returns nil when no supported manifest is found. Callers must treat nil as
+// "cannot enforce" — never as "zero dependencies".
 func CountDeps(c *Contract, root string) *DepResult {
-	candidates := []string{"pyproject.toml", "requirements.txt"}
+	candidates := DepManifests
 	if c.DepsFrom != "" {
 		candidates = []string{c.DepsFrom}
 	}
@@ -29,6 +32,10 @@ func CountDeps(c *Contract, root string) *DepResult {
 			continue
 		}
 		switch {
+		case strings.HasSuffix(name, "go.mod"):
+			if r := parseGoMod(path, name); r != nil {
+				return r
+			}
 		case strings.HasSuffix(name, "pyproject.toml"):
 			if r := parsePyproject(path, name); r != nil {
 				return r
@@ -40,6 +47,49 @@ func CountDeps(c *Contract, root string) *DepResult {
 		}
 	}
 	return nil
+}
+
+// parseGoMod counts direct requires in a go.mod. Requires marked "// indirect"
+// are transitive — pulled in by a direct dep, not chosen — and do not count
+// against the ceiling. Handles both the single-line and parenthesised forms.
+func parseGoMod(path, name string) *DepResult {
+	f, err := os.Open(path)
+	if err != nil {
+		return nil
+	}
+	defer f.Close()
+
+	n := 0
+	inBlock := false
+	sc := bufio.NewScanner(f)
+	for sc.Scan() {
+		line := strings.TrimSpace(sc.Text())
+		if i := strings.Index(line, "//"); i >= 0 {
+			if strings.Contains(line[i:], "indirect") {
+				continue
+			}
+			line = strings.TrimSpace(line[:i])
+		}
+		if line == "" {
+			continue
+		}
+		switch {
+		case inBlock:
+			if line == ")" {
+				inBlock = false
+				continue
+			}
+			n++
+		case line == "require (":
+			inBlock = true
+		case strings.HasPrefix(line, "require "):
+			n++
+		}
+	}
+	if sc.Err() != nil {
+		return nil
+	}
+	return &DepResult{Count: n, From: name}
 }
 
 type pyproject struct {
