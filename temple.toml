@@ -9,6 +9,7 @@ allow = [
   "cmd/**",
   "internal/**",
   ".github/**",
+  "docs/**",
   "*.md",
   "*.toml",
   "*.yml",
@@ -19,7 +20,15 @@ allow = [
 ]
 
 # Hard budgets.
-max_files = 20
+#
+# Was 20 through v0.3.1. Raised to 24 to admit docs/** — a banner and two
+# flow diagrams for the README, checked in as .svg so the README doesn't
+# depend on an external image host. 18 tracked files + 3 new assets = 21;
+# rounded up to 24 rather than the exact minimum, leaving headroom for a
+# reasonable next asset without an immediate second bump. SVG doesn't
+# count toward max_lines (not in count_ext) — this is a file-count change
+# only, not a line-budget one.
+max_files = 24
 
 # Set to 1100 in v0.3.0 (Go port). The self-check measured 1045 lines;
 # Go test files are more verbose than Python's unittest (explicit type

@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="docs/banner.svg" alt="temple — fail the build when a repo drifts past its declared scope" width="100%">
+</p>
+
 # temple
 
 **Fail the build when a repo drifts past its declared single-purpose scope.**
@@ -61,6 +65,10 @@ temple — scope contract check
 
 ## What it checks
 
+<p align="center">
+  <img src="docs/how-it-works.svg" alt="temple.toml feeds five checks -- structure, files, lines, deps, forbid -- producing pass, fail, or error" width="100%">
+</p>
+
 1. **structure** — every git-tracked file matches an `allow` glob (`**`, `*`, `?` supported). Anything outside is drift.
 2. **files** — tracked-file count stays under `max_files`.
 3. **lines** — total source lines (counted extensions) stay under `max_lines`.
@@ -105,6 +113,10 @@ Inputs, all optional:
 | `config` | `temple.toml` | path to the scope contract. |
 | `root` | `.` | repo root to inspect. |
 | `format` | `text` | `text`, `json`, or `sarif`. |
+
+<p align="center">
+  <img src="docs/action-flow.svg" alt="the action downloads the matched binary, verifies its checksum failing closed, runs temple check, and produces an exit code or a SARIF report" width="100%">
+</p>
 
 ## GitHub code scanning (SARIF)
 
